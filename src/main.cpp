@@ -1,59 +1,134 @@
 #include <Arduino.h>
-#include "esp32cam.h"
+#include "esp_camera.h"
+#include "camera_pins.h"
 
-static camera_config_t camera_config = {
-    .pin_pwdn = CAM_PIN_PWDN,
-    .pin_reset = CAM_PIN_RESET,
-    .pin_xclk = CAM_PIN_XCLK,
-    .pin_sscb_sda = CAM_PIN_SIOD,
-    .pin_sscb_scl = CAM_PIN_SIOC,
+#define FRAME_SIZE FRAMESIZE_QQVGA
+#define WIDTH 160
+#define HEIGHT 120 
 
-    .pin_d7 = CAM_PIN_D7,
-    .pin_d6 = CAM_PIN_D6,
-    .pin_d5 = CAM_PIN_D5,
-    .pin_d4 = CAM_PIN_D4,
-    .pin_d3 = CAM_PIN_D3,
-    .pin_d2 = CAM_PIN_D2,
-    .pin_d1 = CAM_PIN_D1,
-    .pin_d0 = CAM_PIN_D0,
-    .pin_vsync = CAM_PIN_VSYNC,
-    .pin_href = CAM_PIN_HREF,
-    .pin_pclk = CAM_PIN_PCLK,
+uint16_t img_array [HEIGHT][WIDTH] = { 0 };
 
-    //XCLK 20MHz or 10MHz for OV2640 double FPS (Experimental)
-    .xclk_freq_hz = 20000000,
-    .ledc_timer = LEDC_TIMER_0,
-    .ledc_channel = LEDC_CHANNEL_0,
 
-    .pixel_format = PIXFORMAT_JPEG, //YUV422,GRAYSCALE,RGB565,JPEG
-    .frame_size = FRAMESIZE_VGA,    //QQVGA-UXGA Do not use sizes above QVGA when not JPEG
-
-    .jpeg_quality = 12, //0-63 lower number means higher quality
-    .fb_count = 1       //if more than one, i2s runs in continuous mode. Use only with JPEG
-};
+bool setup_camera(framesize_t);
+void frame_to_array(camera_fb_t * frame);
+void print_image_shape(camera_fb_t * frame);
+bool capture_image();
 
 void setup() {
-  Serial.begin(115200);
-  esp_err_t err = esp_camera_init(&camera_config);
+    Serial.begin(115200);
+    Serial.println(setup_camera(FRAME_SIZE) ? "OK" : "ERR INIT");
 }
 
 void loop() {
+    if (!capture_image()) {
+        Serial.println("Failed capture");
+        delay(2000);
 
-  sensor_t * s = esp_camera_sensor_get();
-  s->pixformat = PIXFORMAT_RGB565;
-  s->set_framesize(s, FRAMESIZE_VGA);
-  camera_fb_t * pic = esp_camera_fb_get();
+        return;
+    }
 
-  Serial.println(pic->format);
-  Serial.println(pic->height);
-  Serial.println(pic->width);
+    //print_features();
+    delay(3000);
+}
 
-  for (int i=0; i < pic->len; i++) {
-    Serial.println(pic->buf[i], HEX);
-  }
-  
-  delay(5000);
 
-  Serial.println(" ");
+
+bool setup_camera(framesize_t frameSize) {
+    camera_config_t config;
+
+    config.ledc_channel = LEDC_CHANNEL_0;
+    config.ledc_timer = LEDC_TIMER_0;
+    config.pin_d0 = Y2_GPIO_NUM;
+    config.pin_d1 = Y3_GPIO_NUM;
+    config.pin_d2 = Y4_GPIO_NUM;
+    config.pin_d3 = Y5_GPIO_NUM;
+    config.pin_d4 = Y6_GPIO_NUM;
+    config.pin_d5 = Y7_GPIO_NUM;
+    config.pin_d6 = Y8_GPIO_NUM;
+    config.pin_d7 = Y9_GPIO_NUM;
+    config.pin_xclk = XCLK_GPIO_NUM;
+    config.pin_pclk = PCLK_GPIO_NUM;
+    config.pin_vsync = VSYNC_GPIO_NUM;
+    config.pin_href = HREF_GPIO_NUM;
+    config.pin_sscb_sda = SIOD_GPIO_NUM;
+    config.pin_sscb_scl = SIOC_GPIO_NUM;
+    config.pin_pwdn = PWDN_GPIO_NUM;
+    config.pin_reset = RESET_GPIO_NUM;
+    config.xclk_freq_hz = 20000000;
+    config.pixel_format = PIXFORMAT_GRAYSCALE;
+    config.frame_size = frameSize;
+    config.jpeg_quality = 12;
+    config.fb_count = 1;
+
+    bool ok = esp_camera_init(&config) == ESP_OK;
+
+    sensor_t *sensor = esp_camera_sensor_get();
+    sensor->set_framesize(sensor, frameSize);
+
+    return ok;
+}
+
+
+
+bool capture_image() {
+
+    camera_fb_t * frame = NULL;
+    frame = esp_camera_fb_get();
+
+    print_image_shape(frame);
+
+    frame_to_array(frame);
+
+    esp_camera_fb_return(frame);
+
+    if (!frame)
+        return false;
+
+    return true;
+}
+
+
+void print_image_shape(camera_fb_t * frame){
+
+    // print shape of image and total length (=heigth*width)
+    Serial.print("Width: ");
+    Serial.print(frame->width);
+    Serial.print("\tHeigth: ");
+    Serial.print(frame->height);
+    Serial.print("\tLength: ");
+    Serial.println(frame->len);
+}
+
+void frame_to_array(camera_fb_t * frame){
+
+    int len = frame->len;
+    char imgBuffer[frame->len];
+    int counter = 0;
+
+    uint16_t img_array [HEIGHT][WIDTH] = { 0 };
+
+    int h_counter = 0;
+    int w_counter = 0;
+
+    // write values from buffer into 2D Array
+    for (int h=0; h < HEIGHT; h++){
+        //Serial.println(h);
+        for (int w=0; w < WIDTH; w++){
+            //Serial.println(w);
+            int position = h*(len/HEIGHT)+w;
+
+            //Serial.println(position);
+            img_array[h][w] = {frame->buf[position]};
+
+            // Serial.print(img_array[h][w]);
+            // Serial.print(",");
+            // delay(2);
+        }
+    }
+
+
+    Serial.println("Current frame:");
+
+    Serial.println("=====================");
 
 }
