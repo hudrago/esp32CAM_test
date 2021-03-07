@@ -1,0 +1,15 @@
+{
+	"folders": [
+		{
+			"name": "esp32CAM_test-1",
+			"path": ".."
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"*.tcc": "cpp",
+			"iomanip": "cpp",
+			"random": "cpp"
+		}
+	}
+}
